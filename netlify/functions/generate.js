@@ -69,7 +69,7 @@ exports.handler = async (event) => {
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: 'llama3-8b-8192',
         messages: [{ role: 'user', content: buildPrompt(answers) }],
         max_tokens: 1024,
       }),

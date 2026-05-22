@@ -394,7 +394,9 @@ export default function App() {
         body: JSON.stringify({ answers: dnaAnswers }),
       });
 
-      const data = await res.json();
+      const text = await res.text();
+      if (!text) throw new Error('Empty response — function may have timed out. Try again.');
+      const data = JSON.parse(text);
       if (!res.ok) throw new Error(data.error || 'Server error');
 
       setTraits(data.traits);
