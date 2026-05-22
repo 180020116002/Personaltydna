@@ -1,3 +1,5 @@
+import { env } from 'netlify:env';
+
 const FALLBACK_TRAITS = [
   {"trait":"Chaos Cortex","emoji":"🌀","color":"#FF6B6B","description":"Thrives in disorder like it pays rent"},
   {"trait":"Midnight Hunger Protocol","emoji":"🍕","color":"#00FFD1","description":"Snacks at 2am without guilt or regret"},
@@ -52,7 +54,7 @@ export default async (request) => {
     return new Response(JSON.stringify({ error: 'All 5 answers are required.' }), { status: 400, headers });
   }
 
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = env.get('GROQ_API_KEY');
   if (!apiKey) {
     return new Response(JSON.stringify({ error: 'GROQ_API_KEY not configured.' }), { status: 500, headers });
   }
