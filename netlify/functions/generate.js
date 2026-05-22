@@ -28,29 +28,40 @@ Rules:
 - color: vivid neon hex, all 8 must be different, use exactly these: #FF6B6B #00FFD1 #9B5DE5 #FFD93D #FF6B9D #4ECDC4 #45B7D1 #F7DC6F
 - description: 8-12 words, brutally honest and funny, do NOT use double quotes inside the description`;
 
+const HEADERS = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' };
+
 exports.handler = async (event) => {
+  // Handle CORS preflight
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 204, headers: HEADERS, body: '' };
+  }
+
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+    return { statusCode: 405, headers: HEADERS, body: JSON.stringify({ error: 'Method Not Allowed' }) };
   }
 
   let answers;
   try {
-    ({ answers } = JSON.parse(event.body));
+    const body = JSON.parse(event.body || '{}');
+    answers = body.answers;
   } catch {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
+    return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'Invalid JSON body' }) };
   }
 
   const required = ['food', 'fear', 'coffee', 'word', 'chaos'];
   if (!answers || required.some((k) => !answers[k] || !answers[k].trim())) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'All 5 answers are required.' }) };
+    return { statusCode: 400, headers: HEADERS, body: JSON.stringify({ error: 'All 5 answers are required.' }) };
   }
 
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
-    return { statusCode: 500, body: JSON.stringify({ error: 'GROQ_API_KEY not configured.' }) };
+    return { statusCode: 500, headers: HEADERS, body: JSON.stringify({ error: 'GROQ_API_KEY not configured.' }) };
   }
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25000);
+
     const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -62,10 +73,15 @@ exports.handler = async (event) => {
         messages: [{ role: 'user', content: buildPrompt(answers) }],
         max_tokens: 1024,
       }),
+      signal: controller.signal,
     });
 
+    clearTimeout(timeout);
+
     const data = await groqRes.json();
-    if (!groqRes.ok) throw new Error(data.error?.message || 'Groq API error');
+    if (!groqRes.ok) {
+      return { statusCode: 502, headers: HEADERS, body: JSON.stringify({ error: data.error?.message || 'Groq API error' }) };
+    }
 
     let text = data.choices[0].message.content.trim();
     text = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
@@ -79,13 +95,11 @@ exports.handler = async (event) => {
       traits = FALLBACK_TRAITS;
     }
 
-    return {
-      statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ traits }),
-    };
+    return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ traits }) };
+
   } catch (err) {
-    console.error(err);
-    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
+    console.error('Function error:', err.message);
+    // On any error, return fallback traits so the app still works
+    return { statusCode: 200, headers: HEADERS, body: JSON.stringify({ traits: FALLBACK_TRAITS }) };
   }
 };
